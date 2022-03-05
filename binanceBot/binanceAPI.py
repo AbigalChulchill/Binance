@@ -10,11 +10,7 @@ class Binance:
     def __init__(self):
         self.client = Client()
 
-    def __get_data(self, symbol: str, start_date: datetime, end_date: datetime, interval: str) -> pd.DataFrame:
-        start_date = (start_date - timedelta(seconds=3 * 60 * 60)).strftime('%s')
-        end_date = end_date.strftime('%s')
-
-        # data = self.client.get_historical_klines(symbol, interval, start_date, end_date)
+    def __get_data(self, symbol: str, interval: str) -> pd.DataFrame:
         data = self.client.get_klines(symbol=symbol, interval=interval)
         for i in range(len(data)):
             data[i][0] = data[i][0] // 1000
@@ -25,7 +21,6 @@ class Binance:
         data_frame.columns = ['date', symbol]
         data_frame['date'] = pd.to_datetime(data_frame['date'], unit='s')
         data_frame = data_frame.set_index('date')
-
         return data_frame
 
     @staticmethod
@@ -37,10 +32,9 @@ class Binance:
         return data_copy
 
     def get_different(self, symbol1: str, symbol2: str,
-                      start_date: datetime, end_date: datetime, interval: str,
-                      percentage_scale=True) -> tuple:
-        data1 = self.__get_data(symbol1, start_date, end_date, interval)
-        data2 = self.__get_data(symbol2, start_date, end_date, interval)
+                      interval: str, percentage_scale=True) -> tuple:
+        data1 = self.__get_data(symbol1, interval)
+        data2 = self.__get_data(symbol2, interval)
 
         if percentage_scale:
             data1 = Binance.__cost_to_percentage(data1, symbol1)
@@ -50,12 +44,10 @@ class Binance:
         plt.plot(data1.index, data1[symbol1], label=symbol1)
         plt.plot(data2.index, data2[symbol2], label=symbol2)
 
-        img_name = symbol1 + '-' + symbol2 + '.png'
+        img_name = 'static/binanceBot/img/' + symbol1 + '-' + symbol2 + '.png'
         plt.legend()
-        plt.savefig('static/binanceBot/img/' + img_name)
+        plt.savefig(img_name)
 
         plt.cla()
 
         return img_name, data1[symbol1][-1], data2[symbol2][-1], data1.index[0], data1.index[-1]
-
-
