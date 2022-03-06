@@ -11,6 +11,7 @@ class SymbolPairs(models.Model):
     symbol1 = models.CharField(max_length=15, null=False)
     symbol2 = models.CharField(max_length=15, null=False)
     interval = models.CharField(max_length=5, null=False)
+    need_percent = models.IntegerField(null=True)
 
     class Meta:
         unique_together = ('symbol1', 'symbol2', 'interval')

@@ -29,7 +29,7 @@ logging.basicConfig(level=logging.INFO,
 
 main_keyboard = ReplyKeyboardMarkup([
     ['Редактировать пары'],
-])
+], resize_keyboard=True)
 
 
 class RepeatTimer(th.Timer):
@@ -45,7 +45,7 @@ class Command(BaseCommand):
         config = ConfigParser()
         config.read('config.ini')
 
-        bot_token = config['Bot']['token']
+        bot_token = config['Bot']['token2']
 
         updater = Updater(token=bot_token)
 
@@ -56,7 +56,7 @@ class Command(BaseCommand):
         dispatcher.add_handler(MessageHandler(Filters.regex('Редактировать пары'), redact_pairs_command))
         dispatcher.add_handler(CallbackQueryHandler(button))
 
-        RepeatTimer(58, send_graphs, [updater.bot]).start()
+        RepeatTimer(58, send_graphs, [updater.bot, False]).start()
         updater.start_polling()
         updater.idle()
 
@@ -137,7 +137,7 @@ def button(update: Update, _: CallbackContext):
                             reply_markup=generate_inline_keyboard(update.effective_chat.id))
 
 
-def send_graphs(bot: Bot):
+def send_graphs(bot: Bot, send_date: bool):
     symbol_pairs = SymbolPairs.objects.all()
 
     user_pairs = UserPairs.objects.all()
@@ -151,19 +151,31 @@ def send_graphs(bot: Bot):
         img, percent1, percent2, start_date, end_date = bnc.get_different(i.symbol1, i.symbol2, i.interval)
 
         different = int((percent1 - percent2) * 100) / 100
-        caption = f'{i.symbol1} percent: {percent1}\n{i.symbol2} percent: {percent2}\n' \
-                  f'Different: {different}\n' \
-                  f'Date from:\t{start_date.strftime("%Y/%m/%d %H-%M-%S")}\n' \
-                  f'Date to:\t{end_date.strftime("%Y/%m/%d %H-%M-%S")}'
+        logging.info(f'Get {i.symbol1}/{i.symbol2} in interval {i.interval}. '
+                     f'Different: {different}. Need: {i.need_percent}')
 
-        graphs[i.id] = {'img': img, 'percent1': percent1, 'percent2': percent2,
-                        'start_date': start_date, 'end_date': end_date, 'different': different,
-                        'caption': caption}
+        if abs(different) < i.need_percent:
+            continue
 
-        logging.info(f'Get {i.symbol1}/{i.symbol2} in interval {i.interval}')
+        graphs[i.id] = {i.symbol1: percent1, i.symbol2: percent2,
+                        'different': different, 'need_percent': i.need_percent}
+
+        if send_date:
+            graphs[i.id]['Start date'] = start_date.strftime("%Y/%m/%d %H-%M-%S")
+            graphs[i.id]['End date'] = end_date.strftime("%Y/%m/%d %H-%M-%S")
+
+        caption = ''
+
+        for key in graphs[i.id]:
+            caption += key + ': ' + str(graphs[i.id][key]) + '\n'
+
+        graphs[i.id]['img'] = img
+        graphs[i.id]['caption'] = caption
 
     for i in user_pairs:
         pair_id = i.symbol_pair.id
+        if pair_id not in graphs:
+            continue
 
         bot.send_photo(chat_id=i.user_bot.chat_id, photo=open(graphs[pair_id]['img'], 'rb'),
                        caption=graphs[pair_id]['caption'])
