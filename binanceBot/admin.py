@@ -5,14 +5,15 @@ from binanceBot.models import UserBot, UserPairs, SymbolPairs
 
 @admin.register(UserBot)
 class UserBotAdmin(admin.ModelAdmin):
-    list_display = ('chat_id', )
+    list_display = ('chat_id', 'mode')
 
 
 @admin.register(UserPairs)
 class UserPairsAdmin(admin.ModelAdmin):
-    list_display = ('user_bot', 'symbol_pair')
+    ordering = ('symbol_pair', )
+    list_display = ('user_bot', 'symbol_pair', 'status')
 
 
 @admin.register(SymbolPairs)
 class SymbolPairsAdmin(admin.ModelAdmin):
-    list_display = ('symbol1', 'symbol2', 'interval', 'need_percent')
+    list_display = ('symbol1', 'symbol2', 'interval', 'open_percent', 'close_percent')

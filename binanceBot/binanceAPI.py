@@ -44,7 +44,7 @@ class Binance:
         plt.plot(data1.index, data1[symbol1], label=symbol1)
         plt.plot(data2.index, data2[symbol2], label=symbol2)
 
-        img_name = 'static/binanceBot/img/' + symbol1 + '-' + symbol2 + '.png'
+        img_name = 'static/binanceBot/img/' + symbol1 + '-' + symbol2 + '-' + interval + '.png'
         plt.legend()
         plt.savefig(img_name)
 
