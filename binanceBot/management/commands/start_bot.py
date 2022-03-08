@@ -43,7 +43,7 @@ class Command(BaseCommand):
         config = ConfigParser()
         config.read('config.ini')
 
-        bot_token = config['Bot']['token2']
+        bot_token = config['Bot']['token']
 
         updater = Updater(token=bot_token)
 
