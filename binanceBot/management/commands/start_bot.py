@@ -215,6 +215,7 @@ def send_signal(bot: Bot, chat_id: int, pair: SymbolPairs,
 
 
 def check_symbols(bot: Bot):
+    
     logging.info('GETTING SYMBOLS')
     pairs = SymbolPairs.objects.all()
     bnc = Binance(test_net=settings.USE_TEST_NET)

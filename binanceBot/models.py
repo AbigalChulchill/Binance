@@ -30,13 +30,20 @@ class SymbolPairs(models.Model):
     def __str__(self):
         return f'{self.symbol1}/{self.symbol2} {self.interval} {self.open_percent}/{self.close_percent}'
 
+    def __eq__(self, other):
+        return self.symbol1 == other.symbol1 and self.symbol2 == other.symbol2 and self.interval == other.interval
+
     def save(self, *args, **kwargs):
 
-        super().save(*args, **kwargs)
-        users_bot = UserBot.objects.all()
+        if len(SymbolPairs.objects.filter(symbol1=self.symbol1, symbol2=self.symbol2, interval=self.interval)) == 0:
+            super().save(*args, **kwargs)
 
-        for user in users_bot:
-            UserPairs.objects.create(user_bot=user, symbol_pair=self).save()
+            users_bot = UserBot.objects.all()
+
+            for user in users_bot:
+                UserPairs.objects.create(user_bot=user, symbol_pair=self).save()
+        else:
+            super().save(*args, **kwargs)
 
     class Meta:
         unique_together = ('symbol1', 'symbol2', 'interval')
