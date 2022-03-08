@@ -1,17 +1,27 @@
-from binance import Client
+from binance.spot import Spot
+from binance.futures import Futures
 from datetime import datetime
-from datetime import timedelta
 from matplotlib import pyplot as plt
 import matplotlib
 import pandas as pd
 
 
 class Binance:
-    def __init__(self):
-        self.client = Client()
+    def __init__(self, api_key=None, api_secret=None, test_net=False):
+        if not api_key and not api_secret:
+            self.client = Spot()
+            self.futures = Futures()
+        else:
+            self.client = Spot(key=api_key, secret=api_secret)
+            self.futures = Futures(key=api_key, secret=api_secret)
+
+        if test_net:
+            self.client.base_url = 'https://testnet.binance.vision'
+            self.futures.base_url = 'https://testnet.binancefuture.com'
 
     def __get_data(self, symbol: str, interval: str) -> pd.DataFrame:
-        data = self.client.get_klines(symbol=symbol, interval=interval)
+
+        data = self.futures.klines(symbol, interval)
         for i in range(len(data)):
             data[i][0] = data[i][0] // 1000
             data[i][0] = datetime.fromtimestamp(data[i][0])
@@ -32,7 +42,7 @@ class Binance:
         return data_copy
 
     def get_different(self, symbol1: str, symbol2: str,
-                      interval: str, percentage_scale=True) -> tuple:
+                      interval: str, percentage_scale=True, need_img=False) -> tuple:
         data1 = self.__get_data(symbol1, interval)
         data2 = self.__get_data(symbol2, interval)
 
@@ -40,14 +50,17 @@ class Binance:
             data1 = Binance.__cost_to_percentage(data1, symbol1)
             data2 = Binance.__cost_to_percentage(data2, symbol2)
 
-        matplotlib.use('agg')
-        plt.plot(data1.index, data1[symbol1], label=symbol1)
-        plt.plot(data2.index, data2[symbol2], label=symbol2)
+        if need_img:
+            matplotlib.use('agg')
+            plt.plot(data1.index, data1[symbol1], label=symbol1)
+            plt.plot(data2.index, data2[symbol2], label=symbol2)
 
-        img_name = 'static/binanceBot/img/' + symbol1 + '-' + symbol2 + '-' + interval + '.png'
-        plt.legend()
-        plt.savefig(img_name)
+            img_name = 'static/binanceBot/img/' + symbol1 + '-' + symbol2 + '-' + interval + '.png'
+            plt.legend()
+            plt.savefig(img_name)
 
-        plt.cla()
+            plt.cla()
 
-        return img_name, data1[symbol1][-1], data2[symbol2][-1], data1.index[0], data1.index[-1]
+            return img_name, data1[symbol1][-1], data2[symbol2][-1], data1.index[0], data1.index[-1]
+        return data1[symbol1][-1], data2[symbol2][-1], data1.index[0], data1.index[-1]
+

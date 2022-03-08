@@ -13,6 +13,8 @@ class UserBot(models.Model):
     chat_id = models.IntegerField(primary_key=True)
     mode = models.CharField(null=True, max_length=10, choices=MODES, default='L')
     username = models.CharField(null=True, max_length=50)
+    api_key = models.CharField(null=True, max_length=150)
+    api_secret = models.CharField(null=True, max_length=150)
 
     def __str__(self):
         return str(self.username) + "|" + str(self.chat_id)

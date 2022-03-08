@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand
+from django.conf import settings
 from binanceBot.models import UserBot, UserPairs, SymbolPairs
 from configparser import ConfigParser
 from binanceBot.binanceAPI import Binance
@@ -15,7 +16,10 @@ from telegram.ext import (
     Filters,
 )
 import threading as th
+import datetime
+import time
 import logging
+
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -53,10 +57,19 @@ class Command(BaseCommand):
         dispatcher.add_handler(CommandHandler('stat', statistic_command))
         dispatcher.add_handler(CommandHandler('set_open', set_open_command))
         dispatcher.add_handler(CommandHandler('set_close', set_close_command))
+        # dispatcher.add_handler(CommandHandler('account', account_command))
 
-        RepeatTimer(58, check_symbols, [updater.bot]).start()
+        start_checking(10, updater.bot)
         updater.start_polling()
         updater.idle()
+
+
+def start_checking(interval: int, bot: Bot):
+    while datetime.datetime.now().second != 0:
+        time.sleep(1)
+
+    RepeatTimer(interval, check_symbols, [bot]).start()
+    logging.info('Check thread starting.')
 
 
 def start_command(update: Update, _: CallbackContext):
@@ -125,25 +138,30 @@ def statistic_command(update: Update, _: CallbackContext):
         return
 
     data = data.split()[1:]
-    bnc = Binance()
+    bnc = Binance(test_net=settings.USE_TEST_NET)
 
     symbol1 = data[0]
     symbol2 = data[1]
     interval = data[2]
 
     try:
-        img, percent1, percent2, start_date, end_date = bnc.get_different(symbol1, symbol2, interval)
-        different = int((percent1 - percent2) * 100) / 100
-        caption = f'{symbol1} percent: {percent1}\n' \
-                  f'{symbol2} percent: {percent2}\n' \
-                  f'Different: {different}\n' \
+        img, percent1, percent2, start_date, end_date = bnc.get_different(symbol1, symbol2, interval, need_img=True)
+        different = percent1 - percent2
+        caption = f'{symbol1} percent: {round(percent1, 2)}\n' \
+                  f'{symbol2} percent: {round(percent2, 2)}\n' \
+                  f'Different: {round(different, 2)}\n' \
                   f'Date from:\t{start_date.strftime("%Y/%m/%d %H-%M-%S")}\n' \
                   f'Date to:\t{end_date.strftime("%Y/%m/%d %H-%M-%S")}'
 
         update.effective_chat.send_photo(photo=open(img, 'rb'),
                                          caption=caption)
-    except Exception:
-        update.effective_chat.send_message(text='Something went wrong')
+    except Exception as e:
+        update.effective_chat.send_message(text='Something went wrong: ' + str(e))
+
+
+def account_command(update: Update, _: CallbackContext):
+    user_bot = UserBot.objects.get(chat_id=update.effective_chat.id)
+    bnc = Binance(api_key=user_bot.api_key, api_secret=user_bot.api_secret, test_net=settings.USE_TEST_NET)
 
 
 def show_open_pairs_command(update: Update, _: CallbackContext):
@@ -158,7 +176,7 @@ def show_open_pairs_command(update: Update, _: CallbackContext):
     update.effective_chat.send_message(text=text)
 
 
-def open_users(bot: Bot, pair: SymbolPairs, short: str, long: str, different: float, img: str):
+def open_users(bot: Bot, pair: SymbolPairs, short: str, long: str, different: float):
     user_pairs = UserPairs.objects.all().filter(symbol_pair=pair, status='N')
 
     for user in user_pairs:
@@ -169,10 +187,10 @@ def open_users(bot: Bot, pair: SymbolPairs, short: str, long: str, different: fl
         user.status = 'O'
         user.save()
 
-        send_signal(bot, chat_id, pair, short, long, different, img, 'Open')
+        send_signal(bot, chat_id, pair, short, long, different, 'Open')
 
 
-def close_users(bot: Bot, pair: SymbolPairs, short: str, long: str, different: float, img: str):
+def close_users(bot: Bot, pair: SymbolPairs, short: str, long: str, different: float):
     user_pairs = UserPairs.objects.all().filter(symbol_pair=pair, status='O')
 
     for user in user_pairs:
@@ -180,12 +198,12 @@ def close_users(bot: Bot, pair: SymbolPairs, short: str, long: str, different: f
         user.status = 'N'
         user.save()
 
-        send_signal(bot, chat_id, pair, short, long, different, img, 'Close')
+        send_signal(bot, chat_id, pair, short, long, different, 'Close')
 
 
 def send_signal(bot: Bot, chat_id: int, pair: SymbolPairs,
                 short: str, long: str, different: float,
-                img: str, status: str):
+                status: str):
 
     bot.send_message(chat_id=chat_id, text=f'STATUS: {status}.\n'
                                            f'Pair: {pair.symbol1}/{pair.symbol2} {pair.interval}.\n'
@@ -199,18 +217,19 @@ def send_signal(bot: Bot, chat_id: int, pair: SymbolPairs,
 def check_symbols(bot: Bot):
     logging.info('GETTING SYMBOLS')
     pairs = SymbolPairs.objects.all()
-    bnc = Binance()
+    bnc = Binance(test_net=settings.USE_TEST_NET)
 
     for pair in pairs:
-        img, per1, per2, start_date, end_date = bnc.get_different(pair.symbol1, pair.symbol2, pair.interval)
+        per1, per2, start_date, end_date = bnc.get_different(pair.symbol1, pair.symbol2, pair.interval)
 
-        different = int((per1 - per2) * 100) / 100
-        logging.info(f'Get {pair.symbol1}/{pair.symbol2} in interval {pair.interval}. '
+        different = round(per1 - per2, 2)
+        logging.info(f'Get {pair.symbol1}/{pair.symbol2}({round(per1, 2)}/{round(per2, 2)}) '
+                     f'in interval {pair.interval}. '
                      f'Different: {different}. Need for open: {pair.open_percent}. '
                      f'Need for close: {pair.close_percent}')
 
         short, long = (pair.symbol1, pair.symbol2) if per1 > per2 else (pair.symbol2, pair.symbol1)
         if abs(different) >= pair.open_percent:
-            open_users(bot, pair, short, long, different, img)
+            open_users(bot, pair, short, long, different)
         elif abs(different) <= pair.close_percent:
-            close_users(bot, pair, short, long, different, img)
+            close_users(bot, pair, short, long, different)
