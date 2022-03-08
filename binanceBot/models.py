@@ -30,6 +30,14 @@ class SymbolPairs(models.Model):
     def __str__(self):
         return f'{self.symbol1}/{self.symbol2} {self.interval} {self.open_percent}/{self.close_percent}'
 
+    def save(self, *args, **kwargs):
+
+        super().save(*args, **kwargs)
+        users_bot = UserBot.objects.all()
+
+        for user in users_bot:
+            UserPairs.objects.create(user_bot=user, symbol_pair=self).save()
+
     class Meta:
         unique_together = ('symbol1', 'symbol2', 'interval')
 
