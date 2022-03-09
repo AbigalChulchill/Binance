@@ -15,6 +15,7 @@ class UserBot(models.Model):
     username = models.CharField(null=True, max_length=50)
     api_key = models.CharField(null=True, max_length=150)
     api_secret = models.CharField(null=True, max_length=150)
+    active = models.BooleanField(null=False, default=True)
 
     def __str__(self):
         return str(self.username) + "|" + str(self.chat_id)

@@ -5,7 +5,7 @@ from binanceBot.models import UserBot, UserPair, SymbolPair, WhiteList
 
 @admin.register(UserBot)
 class UserBotAdmin(admin.ModelAdmin):
-    list_display = ('chat_id', 'mode')
+    list_display = ('chat_id', 'username', 'mode', 'active')
 
 
 @admin.register(UserPair)

@@ -38,6 +38,21 @@ class RepeatTimer(th.Timer):
             self.function(*self.args, **self.kwargs)
 
 
+def check_access_decorator(function):
+    def wrapper(update: Update, context: CallbackContext):
+        chat_id = update.effective_chat.id
+        chats = [i.chat_id for i in UserBot.objects.all()]
+
+        result = None
+        if chat_id not in chats or not UserBot.objects.get(chat_id=chat_id).active:
+            update.effective_chat.send_message(text='Sorry, you don\'t have access')
+        else:
+            result = function(update, context)
+
+        return result
+    return wrapper
+
+
 class Command(BaseCommand):
     help = 'Start bot'
 
@@ -77,14 +92,23 @@ def start_checking(interval: int, bot: Bot):
 
 
 def start_command(update: Update, _: CallbackContext):
-    username = update.effective_user.username
+    username, chat_id = update.effective_user.username, update.effective_chat.id
+
     white_list = [i.username for i in WhiteList.objects.all()]
+    chats = [i.chat_id for i in UserBot.objects.all()]
 
-    if username not in white_list:
+    if username not in white_list and chat_id not in chats:
         update.effective_chat.send_message(text='Sorry, you don\'t have access')
-        return
+        return None
+    elif chat_id in chats and not UserBot.objects.get(chat_id=chat_id).active:
+        update.effective_chat.send_message(text='Sorry, you don\'t have access')
+        return None
+    else:
+        try:
+            WhiteList.objects.get(username=username).delete()
+        except WhiteList.DoesNotExist:
+            pass
 
-    chat_id = update.effective_chat.id
     try:
         user_bot = UserBot.objects.create(chat_id=chat_id, username=update.effective_user.username)
         user_bot.save()
@@ -104,6 +128,7 @@ def start_command(update: Update, _: CallbackContext):
     logging.info(f'User {user_bot} log in')
 
 
+@check_access_decorator
 def set_lite_mode_command(update: Update, _: CallbackContext):
     user_bot = UserBot.objects.get(chat_id=update.effective_chat.id)
     user_bot.mode = 'L'
@@ -112,6 +137,7 @@ def set_lite_mode_command(update: Update, _: CallbackContext):
     update.effective_chat.send_message(text='Current mode: Lite')
 
 
+@check_access_decorator
 def set_hard_mode_command(update: Update, _: CallbackContext):
     user_bot = UserBot.objects.get(chat_id=update.effective_chat.id)
     user_bot.mode = 'H'
@@ -120,6 +146,7 @@ def set_hard_mode_command(update: Update, _: CallbackContext):
     update.effective_chat.send_message(text='Current mode: Hard')
 
 
+@check_access_decorator
 def set_close_command(update: Update, _: CallbackContext):
     data = update.effective_message.text.split()[1:]
 
@@ -131,6 +158,7 @@ def set_close_command(update: Update, _: CallbackContext):
         i.save()
 
 
+@check_access_decorator
 def set_open_command(update: Update, _: CallbackContext):
     data = update.effective_message.text.split()[1:]
 
@@ -142,6 +170,7 @@ def set_open_command(update: Update, _: CallbackContext):
         i.save()
 
 
+@check_access_decorator
 def statistic_command(update: Update, _: CallbackContext):
     data = update.effective_message.text
     if len(data.split()) != 4:
@@ -170,6 +199,7 @@ def statistic_command(update: Update, _: CallbackContext):
         update.effective_chat.send_message(text='Something went wrong: ' + str(e))
 
 
+@check_access_decorator
 def show_open_pairs_command(update: Update, _: CallbackContext):
     chat_id = update.effective_chat.id
 
@@ -186,7 +216,7 @@ def open_users(bot: Bot, pair: SymbolPair, short: str, long: str, different: flo
     user_pairs = UserPair.objects.all().filter(symbol_pair=pair, status='N')
 
     for user in user_pairs:
-        if user.user_bot.mode == 'L' and user.symbol_pair.interval not in ('3m', ):
+        if user.user_bot.mode == 'L' and user.symbol_pair.interval not in ('3m', ) or not user.user_bot.active:
             continue
 
         chat_id = user.user_bot.chat_id
@@ -200,6 +230,8 @@ def close_users(bot: Bot, pair: SymbolPair, short: str, long: str, different: fl
     user_pairs = UserPair.objects.all().filter(symbol_pair=pair, status='O')
 
     for user in user_pairs:
+        if not user.user_bot.active:
+            continue
         chat_id = user.user_bot.chat_id
         user.status = 'N'
         user.save()
