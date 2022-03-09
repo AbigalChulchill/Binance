@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.conf import settings
-from binanceBot.models import UserBot, UserPairs, SymbolPairs
+from binanceBot.models import UserBot, UserPair, SymbolPair, WhiteList
 from configparser import ConfigParser
 from binanceBot.binanceAPI import Binance
 from telegram import (
@@ -29,10 +29,12 @@ main_keyboard = ReplyKeyboardMarkup([
     ['LITE', 'HARD'],
 ], resize_keyboard=True)
 
+BOT_RUNNING = True
+
 
 class RepeatTimer(th.Timer):
     def run(self):
-        while not self.finished.wait(self.interval):
+        while not self.finished.wait(self.interval) and BOT_RUNNING:
             self.function(*self.args, **self.kwargs)
 
 
@@ -57,11 +59,13 @@ class Command(BaseCommand):
         dispatcher.add_handler(CommandHandler('stat', statistic_command))
         dispatcher.add_handler(CommandHandler('set_open', set_open_command))
         dispatcher.add_handler(CommandHandler('set_close', set_close_command))
-        # dispatcher.add_handler(CommandHandler('account', account_command))
 
-        start_checking(10, updater.bot)
+        th.Thread(target=start_checking, args=(10, updater.bot)).start()
         updater.start_polling()
         updater.idle()
+
+        global BOT_RUNNING
+        BOT_RUNNING = False
 
 
 def start_checking(interval: int, bot: Bot):
@@ -73,15 +77,22 @@ def start_checking(interval: int, bot: Bot):
 
 
 def start_command(update: Update, _: CallbackContext):
+    username = update.effective_user.username
+    white_list = [i.username for i in WhiteList.objects.all()]
+
+    if username not in white_list:
+        update.effective_chat.send_message(text='Sorry, you don\'t have access')
+        return
+
     chat_id = update.effective_chat.id
     try:
         user_bot = UserBot.objects.create(chat_id=chat_id, username=update.effective_user.username)
         user_bot.save()
 
-        pairs = SymbolPairs.objects.all()
+        pairs = SymbolPair.objects.all()
 
         for pair in pairs:
-            UserPairs.objects.create(user_bot=user_bot, symbol_pair=pair, status='N').save()
+            UserPair.objects.create(user_bot=user_bot, symbol_pair=pair, status='N').save()
     except Exception:
         user_bot = UserBot.objects.get(chat_id=chat_id)
         user_bot.username = update.effective_user.username
@@ -115,7 +126,7 @@ def set_close_command(update: Update, _: CallbackContext):
     interval = data[0]
     percent = float(data[1])
 
-    for i in SymbolPairs.objects.filter(interval=interval):
+    for i in SymbolPair.objects.filter(interval=interval):
         i.close_percent = percent
         i.save()
 
@@ -126,7 +137,7 @@ def set_open_command(update: Update, _: CallbackContext):
     interval = data[0]
     percent = float(data[1])
 
-    for i in SymbolPairs.objects.filter(interval=interval):
+    for i in SymbolPair.objects.filter(interval=interval):
         i.open_percent = percent
         i.save()
 
@@ -159,15 +170,10 @@ def statistic_command(update: Update, _: CallbackContext):
         update.effective_chat.send_message(text='Something went wrong: ' + str(e))
 
 
-def account_command(update: Update, _: CallbackContext):
-    user_bot = UserBot.objects.get(chat_id=update.effective_chat.id)
-    bnc = Binance(api_key=user_bot.api_key, api_secret=user_bot.api_secret, test_net=settings.USE_TEST_NET)
-
-
 def show_open_pairs_command(update: Update, _: CallbackContext):
     chat_id = update.effective_chat.id
 
-    user_open_pairs = UserPairs.objects.filter(status='O', user_bot=UserBot.objects.get(chat_id=chat_id))
+    user_open_pairs = UserPair.objects.filter(status='O', user_bot=UserBot.objects.get(chat_id=chat_id))
 
     text = 'No open pairs' if len(user_open_pairs) == 0 else ''
     for p in user_open_pairs:
@@ -176,8 +182,8 @@ def show_open_pairs_command(update: Update, _: CallbackContext):
     update.effective_chat.send_message(text=text)
 
 
-def open_users(bot: Bot, pair: SymbolPairs, short: str, long: str, different: float):
-    user_pairs = UserPairs.objects.all().filter(symbol_pair=pair, status='N')
+def open_users(bot: Bot, pair: SymbolPair, short: str, long: str, different: float):
+    user_pairs = UserPair.objects.all().filter(symbol_pair=pair, status='N')
 
     for user in user_pairs:
         if user.user_bot.mode == 'L' and user.symbol_pair.interval not in ('3m', ):
@@ -190,8 +196,8 @@ def open_users(bot: Bot, pair: SymbolPairs, short: str, long: str, different: fl
         send_signal(bot, chat_id, pair, short, long, different, 'Open')
 
 
-def close_users(bot: Bot, pair: SymbolPairs, short: str, long: str, different: float):
-    user_pairs = UserPairs.objects.all().filter(symbol_pair=pair, status='O')
+def close_users(bot: Bot, pair: SymbolPair, short: str, long: str, different: float):
+    user_pairs = UserPair.objects.all().filter(symbol_pair=pair, status='O')
 
     for user in user_pairs:
         chat_id = user.user_bot.chat_id
@@ -201,7 +207,7 @@ def close_users(bot: Bot, pair: SymbolPairs, short: str, long: str, different: f
         send_signal(bot, chat_id, pair, short, long, different, 'Close')
 
 
-def send_signal(bot: Bot, chat_id: int, pair: SymbolPairs,
+def send_signal(bot: Bot, chat_id: int, pair: SymbolPair,
                 short: str, long: str, different: float,
                 status: str):
 
@@ -215,9 +221,8 @@ def send_signal(bot: Bot, chat_id: int, pair: SymbolPairs,
 
 
 def check_symbols(bot: Bot):
-    
     logging.info('GETTING SYMBOLS')
-    pairs = SymbolPairs.objects.all()
+    pairs = SymbolPair.objects.all()
     bnc = Binance(test_net=settings.USE_TEST_NET)
 
     for pair in pairs:

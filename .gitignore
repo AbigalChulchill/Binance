@@ -117,3 +117,5 @@ config.ini
 *.png
 *.png
 *.png
+*.png
+static/binanceBot/img/ETHUSDT-ETCUSDT.png

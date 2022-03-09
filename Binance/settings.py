@@ -55,8 +55,7 @@ ROOT_URLCONF = 'Binance.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates']
-        ,
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -75,12 +74,47 @@ WSGI_APPLICATION = 'Binance.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Binance database's parameters
+USE_TEST_DATABASE = True
+
+# Production database
+# psql -d default_db -U  gen_user -W -p 5432 -h 92.255.78.82
+DATABASE_HOST = '92.255.78.82'
+DATABASE_PORT = '5432'
+DATABASE_PASSWORD = 'zaur3366'
+DATABASE_USER = 'gen_user'
+DATABASE_NAME = 'default_db'
+
+# Test database
+# psql -d default_db -U  gen_user -W -p 5432 -h 188.225.73.77
+TEST_DATABASE_HOST = '188.225.73.77'
+TEST_DATABASE_PORT = '5432'
+TEST_DATABASE_PASSWORD = 'testzaur3366'
+TEST_DATABASE_USER = 'gen_user'
+TEST_DATABASE_NAME = 'default_db'
+
+if USE_TEST_DATABASE:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': TEST_DATABASE_NAME,
+            'USER': TEST_DATABASE_USER,
+            'PASSWORD': TEST_DATABASE_PASSWORD,
+            'HOST': TEST_DATABASE_HOST,
+            'PORT': TEST_DATABASE_PORT
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': DATABASE_NAME,
+            'USER': DATABASE_USER,
+            'PASSWORD': DATABASE_PASSWORD,
+            'HOST': DATABASE_HOST,
+            'PORT': DATABASE_PORT
+        }
+    }
 
 
 # Password validation
