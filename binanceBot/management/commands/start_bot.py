@@ -244,7 +244,7 @@ def send_signal(bot: Bot, chat_id: int, pair: SymbolPair,
                 status: str):
 
     bot.send_message(chat_id=chat_id, text=f'STATUS: {status}.\n'
-                                           f'Pair: {pair.symbol1}/{pair.symbol2} {pair.interval}.\n'
+                                           f'Pair: {pair.symbol1}/{pair.symbol2}.\n'
                                            f'Short: {short}\n'
                                            f'Long: {long}\n'
                                            f'Spread: {different}.')
