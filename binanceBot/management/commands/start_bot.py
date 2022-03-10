@@ -216,7 +216,13 @@ def open_users(bot: Bot, pair: SymbolPair, short: str, long: str, different: flo
     user_pairs = UserPair.objects.all().filter(symbol_pair=pair, status='N')
 
     for user in user_pairs:
-        if user.user_bot.mode == 'L' and user.symbol_pair.interval not in ('3m', ) or not user.user_bot.active:
+        if not user.user_bot.active:
+            continue
+
+        if user.user_bot.mode == 'L' and user.symbol_pair.interval not in ('3m', ):
+            continue
+
+        if user.user_bot.mode == 'H' and user.symbol_pair.interval not in ('5m', ):
             continue
 
         chat_id = user.user_bot.chat_id
