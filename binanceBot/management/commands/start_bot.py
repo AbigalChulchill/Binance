@@ -1,6 +1,3 @@
-import signal
-
-import telegram.error
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from binanceBot.models import UserBot, UserPair, SymbolPair, WhiteList
@@ -19,6 +16,7 @@ from telegram.ext import (
     MessageHandler,
     Filters,
 )
+import telegram.error
 import threading as th
 import datetime
 import time
@@ -27,6 +25,7 @@ import html
 import json
 import traceback
 import os
+import signal
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -83,6 +82,8 @@ class Command(BaseCommand):
         dispatcher.add_handler(CommandHandler('stat', statistic_command))
         dispatcher.add_handler(CommandHandler('set_open', set_open_command))
         dispatcher.add_handler(CommandHandler('set_close', set_close_command))
+        dispatcher.add_handler(CommandHandler('/', check_error_handler_command))
+
         dispatcher.add_error_handler(error_handler)
 
         th.Thread(target=start_checking, args=(10, updater.bot)).start()
@@ -115,6 +116,10 @@ def error_handler(update: object, context: CallbackContext) -> None:
         f'<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n'
         f'<pre>{html.escape(tb_string)}</pre>'
     )
+    if len(message) >= 4096:
+        with open('log_error-' + str(datetime.datetime.now()) + '.txt', 'w') as f:
+            f.write(message)
+        message = message[:4096]
 
     context.bot.send_message(chat_id=UserBot.objects.get(username='claudbros').chat_id,
                              text=message,
@@ -243,6 +248,10 @@ def show_open_pairs_command(update: Update, _: CallbackContext):
         text += f'{p.symbol_pair.symbol1}/{p.symbol_pair.symbol2} {p.symbol_pair.interval}\n'
 
     update.effective_chat.send_message(text=text)
+
+
+def check_error_handler_command(update: Update, _: CallbackContext):
+    raise telegram.error.NetworkError('Test error')
 
 
 def open_order(user_pair: UserPair, short: str, long: str):
