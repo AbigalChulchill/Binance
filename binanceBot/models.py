@@ -10,7 +10,7 @@ class UserBot(models.Model):
         ('L', 'LITE'),
     ]
 
-    chat_id = models.IntegerField(primary_key=True)
+    chat_id = models.BigIntegerField(primary_key=True)
     mode = models.CharField(null=True, max_length=10, choices=MODES, default='L')
     username = models.CharField(null=True, max_length=50)
     api_key = models.CharField(null=True, max_length=150)

@@ -1,3 +1,5 @@
+import signal
+
 import telegram.error
 from django.core.management.base import BaseCommand
 from django.conf import settings
@@ -24,6 +26,7 @@ import logging
 import html
 import json
 import traceback
+import os
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -116,6 +119,8 @@ def error_handler(update: object, context: CallbackContext) -> None:
     context.bot.send_message(chat_id=UserBot.objects.get(username='claudbros').chat_id,
                              text=message,
                              parse_mode=ParseMode.HTML)
+
+    os.kill(os.getpid(), signal.SIGINT)
 
 
 def start_command(update: Update, _: CallbackContext):
