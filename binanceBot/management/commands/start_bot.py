@@ -82,7 +82,7 @@ class Command(BaseCommand):
         dispatcher.add_handler(CommandHandler('stat', statistic_command))
         dispatcher.add_handler(CommandHandler('set_open', set_open_command))
         dispatcher.add_handler(CommandHandler('set_close', set_close_command))
-        dispatcher.add_handler(CommandHandler('/', check_error_handler_command))
+        dispatcher.add_handler(CommandHandler('check_error', check_error_handler_command))
 
         dispatcher.add_error_handler(error_handler)
 
