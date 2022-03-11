@@ -1,3 +1,4 @@
+import telegram.error
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from binanceBot.models import UserBot, UserPair, SymbolPair, WhiteList
@@ -7,6 +8,7 @@ from telegram import (
     Update,
     ReplyKeyboardMarkup,
     Bot,
+    ParseMode,
 )
 from telegram.ext import (
     Updater,
@@ -19,10 +21,14 @@ import threading as th
 import datetime
 import time
 import logging
-
+import html
+import json
+import traceback
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+logger = logging.getLogger(__name__)
 
 main_keyboard = ReplyKeyboardMarkup([
     ['Show open pairs'],
@@ -74,6 +80,7 @@ class Command(BaseCommand):
         dispatcher.add_handler(CommandHandler('stat', statistic_command))
         dispatcher.add_handler(CommandHandler('set_open', set_open_command))
         dispatcher.add_handler(CommandHandler('set_close', set_close_command))
+        dispatcher.add_error_handler(error_handler)
 
         th.Thread(target=start_checking, args=(10, updater.bot)).start()
         updater.start_polling()
@@ -84,11 +91,31 @@ class Command(BaseCommand):
 
 
 def start_checking(interval: int, bot: Bot):
-    while datetime.datetime.now().second != 0:
+    while datetime.datetime.now().second % 10 != 0:
         time.sleep(1)
 
     RepeatTimer(interval, check_symbols, [bot]).start()
     logging.info('Check thread starting.')
+
+
+def error_handler(update: object, context: CallbackContext) -> None:
+    # logger.error(msg="Exception while handling an update:", exc_info=context.error)
+    tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
+    tb_string = ''.join(tb_list)
+
+    update_str = update.to_dict() if isinstance(update, Update) else str(update)
+    message = (
+        f'An exception was raised while handling an update\n'
+        f'<pre>update = {html.escape(json.dumps(update_str, indent=2, ensure_ascii=False))}'
+        '</pre>\n\n'
+        f'<pre>context.chat_data = {html.escape(str(context.chat_data))}</pre>\n\n'
+        f'<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n'
+        f'<pre>{html.escape(tb_string)}</pre>'
+    )
+
+    context.bot.send_message(chat_id=UserBot.objects.get(username='claudbros').chat_id,
+                             text=message,
+                             parse_mode=ParseMode.HTML)
 
 
 def start_command(update: Update, _: CallbackContext):
@@ -160,6 +187,7 @@ def set_close_command(update: Update, _: CallbackContext):
 
 @check_access_decorator
 def set_open_command(update: Update, _: CallbackContext):
+
     data = update.effective_message.text.split()[1:]
 
     interval = data[0]
@@ -212,6 +240,18 @@ def show_open_pairs_command(update: Update, _: CallbackContext):
     update.effective_chat.send_message(text=text)
 
 
+def open_order(user_pair: UserPair, short: str, long: str):
+    user = user_pair.user_bot
+
+    bnc = Binance(api_key=user.api_key,
+                  api_secret=user.api_secret,
+                  test_net=settings.USE_TEST_NET)
+
+    bnc.new_order(user_pair, short, long)
+
+    logging.info(f'Create order for {user.username} on SHORT: {short} and LONG: {long}. Deposit {user.default_deposit}')
+
+
 def open_users(bot: Bot, pair: SymbolPair, short: str, long: str, different: float):
     user_pairs = UserPair.objects.all().filter(symbol_pair=pair, status='N')
 
@@ -225,11 +265,17 @@ def open_users(bot: Bot, pair: SymbolPair, short: str, long: str, different: flo
         if user.user_bot.mode == 'H' and user.symbol_pair.interval not in ('5m', ):
             continue
 
-        chat_id = user.user_bot.chat_id
-        user.status = 'O'
-        user.save()
+        try:
+            if user.user_bot.auto_mode:
+                th.Thread(target=open_order, args=(user, short, long)).start()
+        except Exception as e:
+            logging.info(str(e))
+        else:
+            chat_id = user.user_bot.chat_id
+            user.status = 'O'
+            user.save()
 
-        send_signal(bot, chat_id, pair, short, long, different, 'Open')
+            send_signal(bot, chat_id, pair, short, long, different, 'Open')
 
 
 def close_users(bot: Bot, pair: SymbolPair, short: str, long: str, different: float):

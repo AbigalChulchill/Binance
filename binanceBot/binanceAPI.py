@@ -4,6 +4,7 @@ from datetime import datetime
 from matplotlib import pyplot as plt
 import matplotlib
 import pandas as pd
+from binanceBot.models import UserBot, UserPair
 
 
 class Binance:
@@ -64,3 +65,42 @@ class Binance:
             return img_name, data1[symbol1][-1], data2[symbol2][-1], data1.index[0], data1.index[-1]
         return data1[symbol1][-1], data2[symbol2][-1], data1.index[0], data1.index[-1]
 
+    def new_order(self, user_pair: UserPair, short: str, long: str):
+        user = user_pair.user_bot
+        short_price = float(self.futures.ticker_price(short)['price'])
+        long_price = float(self.futures.ticker_price(long)['price'])
+
+        deposit = user.default_deposit
+
+        info = self.futures.exchange_info()
+        short_precision = None
+        long_precision = None
+
+        for x in info['symbols']:
+            if x['symbol'] == short:
+                short_precision = int(x['quantityPrecision'])
+            if x['symbol'] == long:
+                long_precision = int(x['quantityPrecision'])
+
+        quantity_short = round((deposit / 2) / short_price, short_precision)
+        quantity_long = round((deposit / 2) / long_price, long_precision)
+
+        self.futures.change_leverage(symbol=short, leverage=1)
+        self.futures.change_leverage(symbol=long, leverage=1)
+
+        try:
+            self.futures.change_margin_type(symbol=short, marginType='CROSSED')
+            self.futures.change_margin_type(symbol=long, marginType='CROSSED')
+        except Exception:
+            pass
+
+        response_short = self.futures.new_order(symbol=short, side='SELL', type='MARKET', quantity=quantity_short)
+        response_long = self.futures.new_order(symbol=long, side='BUY', type='MARKET', quantity=quantity_long)
+
+        user_pair.order_id_short = int(response_short['orderId'])
+        user_pair.short = short
+
+        user_pair.order_id_long = int(response_long['orderId'])
+        user_pair.long = long
+
+        user_pair.save()

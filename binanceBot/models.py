@@ -16,6 +16,8 @@ class UserBot(models.Model):
     api_key = models.CharField(null=True, max_length=150)
     api_secret = models.CharField(null=True, max_length=150)
     active = models.BooleanField(null=False, default=True)
+    auto_mode = models.BooleanField(null=False, default=False)
+    default_deposit = models.IntegerField(null=False, default=100)
 
     def __str__(self):
         return str(self.username) + "|" + str(self.chat_id)
@@ -61,6 +63,12 @@ class UserPair(models.Model):
     user_bot = models.ForeignKey(UserBot, on_delete=models.CASCADE)
     symbol_pair = models.ForeignKey(SymbolPair, on_delete=models.CASCADE, null=True)
     status = models.CharField(null=False, default='N', max_length=10, choices=STATUSES)
+
+    order_id_short = models.CharField(max_length=50, null=True)
+    short = models.CharField(max_length=15, null=True)
+
+    order_id_long = models.CharField(max_length=50, null=True)
+    long = models.CharField(max_length=15, null=True)
 
     def open(self):
         self.status = 'O'
