@@ -424,9 +424,8 @@ def button(update: Update, context: CallbackContext) -> None:
             user.mode = 'H' if data[1].split()[0] == 'L' else 'L'
         else:
             user.auto_mode = not data[1].split()[0] == 'True'
-
-        query.edit_message_reply_markup(reply_markup=get_settings_inline(chat_id))
         user.save()
+        query.edit_message_reply_markup(reply_markup=get_settings_inline(chat_id))
     else:
         request_id = int(data[1].split()[0])
         try:
