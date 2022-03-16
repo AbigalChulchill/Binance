@@ -1,3 +1,5 @@
+import datetime
+import django.utils.timezone
 from django.db import models
 
 # Create your models here.
@@ -17,7 +19,9 @@ class UserBot(models.Model):
     api_secret = models.CharField(null=True, max_length=150)
     active = models.BooleanField(null=False, default=True)
     auto_mode = models.BooleanField(null=False, default=False)
-    default_deposit = models.IntegerField(null=False, default=100)
+    deposit = models.IntegerField(null=False, default=100)
+    open_percent = models.FloatField(null=False, default=3)
+    close_pnl = models.FloatField(null=False, default=1)
 
     def __str__(self):
         return str(self.username) + "|" + str(self.chat_id)
@@ -26,59 +30,58 @@ class UserBot(models.Model):
         verbose_name_plural = 'Users'
 
 
-class SymbolPair(models.Model):
+class Pair(models.Model):
     symbol1 = models.CharField(max_length=15, null=False)
     symbol2 = models.CharField(max_length=15, null=False)
     interval = models.CharField(max_length=5, null=False)
-    open_percent = models.FloatField(null=True)
-    close_percent = models.FloatField(null=True)
 
     def __str__(self):
-        return f'{self.symbol1}/{self.symbol2} {self.interval} {self.open_percent}/{self.close_percent}'
-
-    def save(self, *args, **kwargs):
-        if len(SymbolPair.objects.filter(symbol1=self.symbol1, symbol2=self.symbol2, interval=self.interval)) == 0:
-            super().save(*args, **kwargs)
-
-            users_bot = UserBot.objects.all()
-
-            for user in users_bot:
-                UserPair.objects.create(user_bot=user, symbol_pair=self).save()
-        else:
-            super().save(*args, **kwargs)
+        return f'{self.symbol1}/{self.symbol2} {self.interval}'
 
     class Meta:
         unique_together = ('symbol1', 'symbol2', 'interval')
         verbose_name_plural = 'Symbols'
 
 
-class UserPair(models.Model):
-
-    STATUSES = [
-        ('N', 'NONE'),
-        ('O', 'OPEN'),
-        ('C', 'CLOSE'),
-    ]
-
+class OpenPair(models.Model):
     user_bot = models.ForeignKey(UserBot, on_delete=models.CASCADE)
-    symbol_pair = models.ForeignKey(SymbolPair, on_delete=models.CASCADE, null=True)
-    status = models.CharField(null=False, default='N', max_length=10, choices=STATUSES)
+    pair = models.ForeignKey(Pair, on_delete=models.CASCADE)
 
-    order_id_short = models.CharField(max_length=50, null=True)
     short = models.CharField(max_length=15, null=True)
-
-    order_id_long = models.CharField(max_length=50, null=True)
     long = models.CharField(max_length=15, null=True)
 
-    def open(self):
-        self.status = 'O'
-
-    def __str__(self):
-        return str(self.user_bot) + "|" + str(self.symbol_pair)
+    deposit = models.FloatField(null=False)
 
     class Meta:
-        unique_together = ('user_bot', 'symbol_pair')
-        verbose_name_plural = 'User pairs'
+        unique_together = ('user_bot', 'pair')
+        verbose_name_plural = 'Open pairs'
+
+
+class ConfirmationRequest(models.Model):
+    user_bot = models.ForeignKey(UserBot, on_delete=models.CASCADE)
+    pair = models.ForeignKey(Pair, on_delete=models.DO_NOTHING)
+    short = models.CharField(max_length=50, null=False)
+    long = models.CharField(max_length=50, null=False)
+
+    deposit = models.FloatField(null=False)
+
+    create_datetime = models.DateTimeField(null=False, default=django.utils.timezone.now)
+
+    text = models.CharField(max_length=500, null=False, default='')
+
+    class Meta:
+        unique_together = ('user_bot', 'pair')
+
+
+class IgnorePair(models.Model):
+    user_bot = models.ForeignKey(UserBot, on_delete=models.CASCADE)
+    pair = models.ForeignKey(Pair, on_delete=models.CASCADE)
+
+    ignore_start = models.DateTimeField(null=False, default=django.utils.timezone.now)
+    ignore_time = models.IntegerField(null=False)
+
+    class Meta:
+        unique_together = ('user_bot', 'pair')
 
 
 class WhiteList(models.Model):

@@ -4,7 +4,8 @@ from datetime import datetime
 from matplotlib import pyplot as plt
 import matplotlib
 import pandas as pd
-from binanceBot.models import UserBot, UserPair
+from pprint import pprint
+# from binanceBot.models import UserBot, UserPair
 
 
 class Binance:
@@ -23,6 +24,7 @@ class Binance:
     def __get_data(self, symbol: str, interval: str) -> pd.DataFrame:
 
         data = self.futures.klines(symbol, interval)
+
         for i in range(len(data)):
             data[i][0] = data[i][0] // 1000
             data[i][0] = datetime.fromtimestamp(data[i][0])
@@ -65,14 +67,11 @@ class Binance:
             return img_name, data1[symbol1][-1], data2[symbol2][-1], data1.index[0], data1.index[-1]
         return data1[symbol1][-1], data2[symbol2][-1], data1.index[0], data1.index[-1]
 
-    def new_order(self, user_pair: UserPair, short: str, long: str):
-        user = user_pair.user_bot
-        short_price = float(self.futures.ticker_price(short)['price'])
-        long_price = float(self.futures.ticker_price(long)['price'])
+    def new_order(self, deposit: float, short: str, long: str):
+        short_price = float(self.futures.ticker_price(short)['price'])  # 1 w
+        long_price = float(self.futures.ticker_price(long)['price'])  # 1 w
 
-        deposit = user.default_deposit
-
-        info = self.futures.exchange_info()
+        info = self.futures.exchange_info()  # 1 w
         short_precision = None
         long_precision = None
 
@@ -82,25 +81,40 @@ class Binance:
             if x['symbol'] == long:
                 long_precision = int(x['quantityPrecision'])
 
-        quantity_short = round((deposit / 2) / short_price, short_precision)
-        quantity_long = round((deposit / 2) / long_price, long_precision)
+        quantity_short = round(deposit / short_price, short_precision)
+        quantity_long = round(deposit / long_price, long_precision)
 
-        self.futures.change_leverage(symbol=short, leverage=1)
-        self.futures.change_leverage(symbol=long, leverage=1)
+        self.futures.change_leverage(symbol=short, leverage=1)  # 1 w
+        self.futures.change_leverage(symbol=long, leverage=1)  # 1 w
 
         try:
-            self.futures.change_margin_type(symbol=short, marginType='CROSSED')
-            self.futures.change_margin_type(symbol=long, marginType='CROSSED')
+            self.futures.change_margin_type(symbol=short, marginType='CROSSED')  # 1 w
+            self.futures.change_margin_type(symbol=long, marginType='CROSSED')  # 1 w
         except Exception:
             pass
 
-        response_short = self.futures.new_order(symbol=short, side='SELL', type='MARKET', quantity=quantity_short)
-        response_long = self.futures.new_order(symbol=long, side='BUY', type='MARKET', quantity=quantity_long)
+        response_short = self.futures.new_order(symbol=short,
+                                                side='SELL',
+                                                type='MARKET',
+                                                quantity=quantity_short,
+                                                reduce_only=True)  # 1 w
+        response_long = self.futures.new_order(symbol=long,
+                                               side='BUY',
+                                               type='MARKET',
+                                               quantity=quantity_long,
+                                               reduce_only=True)  # 1 w
 
-        user_pair.order_id_short = int(response_short['orderId'])
-        user_pair.short = short
+        return int(response_short['orderId']),  int(response_long['orderId'])
 
-        user_pair.order_id_long = int(response_long['orderId'])
-        user_pair.long = long
+    def close_order(self, short: str, long: str):
+        size_short = abs(float(self.futures.get_position_risk(symbol=short)[0]['positionAmt']))
+        size_long = abs(float(self.futures.get_position_risk(symbol=long)[0]['positionAmt']))
 
-        user_pair.save()
+        self.futures.new_order(symbol=short, side='BUY', type='MARKET', quantity=size_short)  # 1
+        self.futures.new_order(symbol=long, side='SELL', type='MARKET', quantity=size_long)  # 1
+
+    def get_pnl_sum(self, short, long):
+        short_pnl = self.futures.get_position_risk(symbol=short)  # 5
+        long_pnl = self.futures.get_position_risk(symbol=long)  # 5
+
+        return float(short_pnl[0]['unRealizedProfit']) + float(long_pnl[0]['unRealizedProfit'])

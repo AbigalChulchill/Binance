@@ -37,7 +37,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'binanceBot'
+    'binanceBot',
 ]
 
 MIDDLEWARE = [
@@ -161,4 +161,4 @@ STATIC_ROOT = BASE_DIR / 'static'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Binance parameters
-USE_TEST_NET = False
+USE_TEST_NET = True
